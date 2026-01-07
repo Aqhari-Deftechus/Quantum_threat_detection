@@ -126,7 +126,24 @@ python scripts/monitoring2.py --video <camera_source> --identity-persistence-ttl
 
 Kindly Import the Database table from Database Folder into local machine
 
+```bash
 
+-- Create the database if it doesn't exist
+CREATE DATABASE IF NOT EXISTS restrictedareadb;
+
+-- Grant permissions to your app user
+GRANT ALL PRIVILEGES ON restrictedareadb.* TO 'admin123'@'localhost';
+
+-- Ensure the password is correct
+ALTER USER 'admin123'@'localhost' IDENTIFIED BY 'Petro@1234';
+
+-- Apply changes
+FLUSH PRIVILEGES;
+
+-- Exit root session
+EXIT;
+
+```
 
 ![Demo](database_.gif) 
 
