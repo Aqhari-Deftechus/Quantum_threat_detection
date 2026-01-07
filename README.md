@@ -135,7 +135,7 @@ CREATE DATABASE IF NOT EXISTS restrictedareadb;
 GRANT ALL PRIVILEGES ON restrictedareadb.* TO 'admin123'@'localhost';
 
 -- Ensure the password is correct
-ALTER USER 'admin123'@'localhost' IDENTIFIED BY 'Petro@1234';
+ALTER USER 'admin123'@'localhost' IDENTIFIED BY 'Deftechus@012026';
 
 -- Apply changes
 FLUSH PRIVILEGES;
