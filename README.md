@@ -29,7 +29,7 @@ It integrates:
 ## Project Structure
 
 ```
-inappropriate_behaviour_v3/
+Quantum_threat_detection/
 ├── database 
 ├── face_data/                         # Per-person image folders
 ├── model/                             # YOLO weight files
@@ -59,16 +59,16 @@ inappropriate_behaviour_v3/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Aqhari/inappropriate_behaviour_v3.git
-cd behavior-monitor
+git clone https://github.com/Aqhari-Deftechus/Quantum_threat_detection.git
+cd Quantum_threat_detection
 ```
 
 ### 2. Create & Activate Virtual Environment
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate   # Linux/macOS
-venv\\Scripts\\activate  # Windows
+python -m venv env_name
+source env_name/bin/activate   # Linux/macOS
+env_name\\Scripts\\activate  # Windows
 ```
 
 ### 3. Install Dependencies
@@ -104,7 +104,7 @@ python scripts/auto_trainer.py
 Launch the real-time monitoring and recognition:
 
 ```bash
-python scripts/monitoring2.py --video <camera_source> --identity-persistence-ttl 5
+python scripts/monitoring.py --video <camera_source> --identity-persistence-ttl 5
 ```
 
 * Replace `<camera_source>` with your camera index or RTSP URL.
