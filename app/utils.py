@@ -1,10 +1,14 @@
 import time
-import jwt
+#import jwt
+import jwt as pyjwt
+
 import shutil
 import logging
 from datetime import datetime, timedelta
 from passlib.context import CryptContext # type: ignore
 from flask import current_app
+from passlib.context import CryptContext  # type: ignore
+from passlib.exc import UnknownHashError
 
 from pathlib import Path
 
@@ -12,12 +16,22 @@ from app.database import get_db_connection
 from app.config import Config # Import Config to access paths
 
 # Initialize the password context once
-pwd_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
+pwd_ctx = CryptContext(
+    schemes=["argon2", "bcrypt"],
+    deprecated="auto"
+)
+
 
 # --- AUTH/JWT HELPERS ---
 
+from passlib.exc import UnknownHashError
+
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_ctx.verify(plain, hashed)
+    try:
+        return pwd_ctx.verify(plain, hashed)
+    except UnknownHashError:
+        return False
+
 
 def hash_password(password: str) -> str:
     return pwd_ctx.hash(password)
@@ -26,14 +40,14 @@ def create_token(data: dict, expires: timedelta | None = None) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires or timedelta(minutes=current_app.config["ACCESS_TOKEN_EXPIRE_MINUTES"]))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, current_app.config["SECRET_KEY"], algorithm=current_app.config["ALGORITHM"])
+    return pyjwt.encode(to_encode, current_app.config["SECRET_KEY"], algorithm=current_app.config["ALGORITHM"])
 
 def decode_token(token: str) -> dict:
     try:
-        return jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=[current_app.config["ALGORITHM"]])
-    except jwt.ExpiredSignatureError:
+        return pyjwt.decode(token, current_app.config["SECRET_KEY"], algorithms=[current_app.config["ALGORITHM"]])
+    except pyjwt.ExpiredSignatureError:
         raise Exception("Token expired")
-    except jwt.InvalidTokenError:
+    except pyjwt.InvalidTokenError:
         raise Exception("Invalid token")
 
 

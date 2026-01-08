@@ -8,7 +8,7 @@ class Config:
     # Database Config
     DB_HOST = "localhost"
     DB_USER = "admin123"
-    DB_PASSWORD = "Petro@123"
+    DB_PASSWORD = "Deftechus@012026"
     DB_NAME = "RestrictedAreaDB"
 
     # Paths
