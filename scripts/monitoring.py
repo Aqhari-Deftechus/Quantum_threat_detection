@@ -70,7 +70,7 @@ UNAUTHORIZED_COOLDOWN_SECONDS = 10 # per camera
 DB_CONFIG = {
     "host": "localhost",   # IMPORTANT: avoid localhost socket issues
     "user": "admin123",
-    "password": "Petro@123",
+    "password": "Degftech@012026",
     "database": "RestrictedAreaDB",
     #"port": 3306
 }

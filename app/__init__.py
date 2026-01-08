@@ -15,7 +15,7 @@ from app.database import connect_db_simple # Use simple connection for initial t
 swagger_template = {
     "swagger": "2.0",
     "info": {
-        "title": "Auth & Face API (Flask) - Modular",
+        "title": "Backend API",
         "description": "Modular Flask application using Blueprints.",
         "version": "1.0.0"
     },
@@ -42,15 +42,54 @@ swagger_template = {
         # {"name": "face", "description": "Face data endpoints"}
     ]
 }
+#swagger_config = {
+#    "headers": [],
+#    "specs": [
+#        {"endpoint": "apispec_1", "route": "/apispec_1.json", "rule_filter": lambda rule: True, "model_filter": lambda tag: True}
+#    ],
+#    "static_url_path": "/flasgger_static",
+#    "swagger_ui": True,
+#    "specs_route": "/docs/"
+#}
+
 swagger_config = {
     "headers": [],
     "specs": [
-        {"endpoint": "apispec_1", "route": "/apispec_1.json", "rule_filter": lambda rule: True, "model_filter": lambda tag: True}
+        {
+            "endpoint": "apispec_1",
+            "route": "/apispec_1.json",
+            "rule_filter": lambda rule: True,
+            "model_filter": lambda tag: True
+        }
     ],
     "static_url_path": "/flasgger_static",
     "swagger_ui": True,
-    "specs_route": "/docs/"
+    "specs_route": "/docs/",
+
+    # 🔐 AUTO-INJECT JWT AFTER LOGIN
+    "swagger_ui_config": {
+        "responseInterceptor": """
+        (response) => {
+            try {
+                if (response.url.endsWith('/auth/login') && response.status === 200) {
+                    const data = JSON.parse(response.text);
+                    if (data.token) {
+                        window.ui.preauthorizeApiKey(
+                            'Bearer',
+                            data.token
+                        );
+                        console.log('JWT token auto-authorized in Swagger');
+                    }
+                }
+            } catch (e) {
+                console.error('Swagger JWT auto-auth failed', e);
+            }
+            return response;
+        }
+        """
+    }
 }
+
 
 def create_app(config_class=Config):
     """Flask Application Factory function."""
