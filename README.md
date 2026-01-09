@@ -131,14 +131,15 @@ Kindly Import the Database table from Database Folder into local machine
 -- Create the database if it doesn't exist
 CREATE DATABASE IF NOT EXISTS restrictedareadb;
 
--- Grant permissions to your app user
+-- 1. Create the user explicitly
+CREATE USER IF NOT EXISTS 'admin123'@'localhost' IDENTIFIED BY 'Deftechus@012026';
+
+-- 2. Grant privileges
 GRANT ALL PRIVILEGES ON restrictedareadb.* TO 'admin123'@'localhost';
 
--- Ensure the password is correct
-ALTER USER 'admin123'@'localhost' IDENTIFIED BY 'Deftechus@012026';
-
--- Apply changes
+-- 3. Apply changes
 FLUSH PRIVILEGES;
+
 
 -- Exit root session
 EXIT;
