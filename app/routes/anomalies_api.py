@@ -1,3 +1,5 @@
+#app/routes/anomalies_api.py
+
 import json
 import mimetypes
 import subprocess
@@ -11,10 +13,10 @@ import cv2
 # =========================================================
 
 ANOMALY_BASE_DIR = Path(
-    r"C:\Users\dusai\Desktop\Quantum_Threat_Detection\Anomalies_video"
+    r"C:\Users\dus_m\OneDrive\Desktop\Quantum_threat_detection\Anomalies_video"
 )
 
-FFMPEG_PATH = r"C:\Users\dusai\Desktop\Quantum_Threat_Detection\ffmpeg-8.0.1-essentials_build\bin\ffmpeg.exe"  # <-- CHANGE IF NEEDED
+FFMPEG_PATH = r"C:\Users\dus_m\OneDrive\Desktop\Quantum_threat_detection\ffmpeg-8.0.1-essentials_build\bin\ffmpeg.exe"  # <-- CHANGE IF NEEDED
 MAX_LIST_LIMIT = 1000
 THUMBNAIL_SIZE = (160, 120)
 
@@ -326,3 +328,4 @@ def get_anomaly_video(anomaly_id):
             "Content-Disposition": "inline"
         }
     )
+

@@ -1,3 +1,5 @@
+#scripts/auto_trainer.py
+
 import time
 import threading
 import argparse

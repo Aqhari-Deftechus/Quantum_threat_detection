@@ -1,4 +1,4 @@
-# application.py
+# app/routes/application.py
 
 import sys
 from pathlib import Path
@@ -141,6 +141,16 @@ def delete_camera(camera_id):
     monitoring.remove_camera(camera_id)
     return jsonify({"status": "deleted", "camera_id": camera_id})
 
+@application_bp.route("/cameras/<camera_id>/faces")
+def camera_faces(camera_id):
+    data = monitoring.get_latest_faces(camera_id)
+    return jsonify(data if data else {})
+
+@application_bp.route("/cameras/<camera_id>/anomalies")
+def camera_anomalies(camera_id):
+    data = monitoring.get_latest_anomalies(camera_id)
+    return jsonify(data if data else {})
+
 # --------------------------------------------------
 # Camera Connection Test
 # --------------------------------------------------
@@ -215,6 +225,51 @@ def stream_camera(camera_id):
         mimetype="multipart/x-mixed-replace; boundary=frame"
     )
 
+import json
+
+@application_bp.route("/events/stream")
+def stream_events():
+
+    def event_generator():
+        last_face_ts = {}
+
+        while True:
+            for cid in monitoring.list_cameras():
+                face_data = monitoring.get_latest_faces(cid)
+
+                if not face_data:
+                    continue
+
+                ts = face_data.get("timestamp")
+                if ts == last_face_ts.get(cid):
+                    continue
+
+                last_face_ts[cid] = ts
+
+                details = monitoring.fetch_worker_details(face_data["name"])
+
+                payload = {
+                    "camera_id": cid,
+                    "name": face_data.get("name"),
+                    "auth": face_data.get("auth"),
+                    "similarity": round(face_data.get("similarity", 0), 2),
+                    "details": details or {},
+
+                    # THESE ARE CRITICAL FOR BOUNDING BOX
+                    "bbox": face_data.get("bbox"),
+                    "frame_width": face_data.get("frame_width"),
+                    "frame_height": face_data.get("frame_height"),
+
+                    "details": details or {}
+                }
+
+                print("SENDING EVENT:", payload)  # DEBUG (you should see bbox here)
+
+                yield f"data: {json.dumps(payload)}\n\n"
+
+            time.sleep(0.2)
+
+    return Response(event_generator(), mimetype="text/event-stream")
 
 # --------------------------------------------------
 # Health Check (Blueprint level)

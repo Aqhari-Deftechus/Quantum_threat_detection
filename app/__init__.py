@@ -1,4 +1,4 @@
-# __init__.py
+# app/__init__.py
 
 import logging
 from flask import Flask, jsonify
@@ -29,16 +29,16 @@ swagger_template = {
     },
     "security": [{"Bearer": []}],
     "tags": [
-        {"name": "Admin", "description": "Check database connectivity and health"},
-        {"name": "Authentication", "description": "Login, logout, token management"},
-        {"name": "Users", "description":"Admin user management"},
-        {"name": "Employees", "description": "Employee registration and face enrollment"},
-        {"name": "Cameras", "description": "Camera configuration and streaming"},
-        {"name": "Areas", "description": "Area/zone management"},
-        {"name": "Attendance", "description": "Attendance records and tracking"},
-        {"name": "Notifications", "description": "Notification preferences and history"},
-        {"name": "Reports", "description": "Attendance reports and analytics"},
-        {"name": "Application", "description": "Detection end Point"}
+        #{"name": "Admin", "description": "Check database connectivity and health"},
+        #{"name": "Authentication", "description": "Login, logout, token management"},
+        #{"name": "Users", "description":"Admin user management"},
+        #{"name": "Employees", "description": "Employee registration and face enrollment"},
+        #{"name": "Cameras", "description": "Camera configuration and streaming"},
+        #{"name": "Areas", "description": "Area/zone management"},
+        #{"name": "Attendance", "description": "Attendance records and tracking"},
+        #{"name": "Notifications", "description": "Notification preferences and history"},
+        #{"name": "Reports", "description": "Attendance reports and analytics"},
+        #{"name": "Application", "description": "Detection end Point"}
         # {"name": "face", "description": "Face data endpoints"}
     ]
 }
@@ -104,28 +104,28 @@ def create_app(config_class=Config):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     # ==================== REGISTER BLUEPRINTS ====================
-    from app.routes.auth import auth_bp
-    from app.routes.users import user_bp
-    from app.routes.areas import area_bp
-    from app.routes.cameras import camera_bp
-    from app.routes.employees import employee_bp
-    from app.routes.attendance import attendance_bp
-    from app.routes.report import report_bp
-    from app.routes.notification import notification_bp
-    from app.routes.admin import admin_bp
+    #from app.routes.auth import auth_bp
+    #from app.routes.users import user_bp
+    #from app.routes.areas import area_bp
+    #from app.routes.cameras import camera_bp
+    #from app.routes.employees import employee_bp
+    #from app.routes.attendance import attendance_bp
+    #from app.routes.report import report_bp
+    #from app.routes.notification import notification_bp
+    #from app.routes.admin import admin_bp
     #from app.routes.application import application
     from app.routes.application import application_bp
     from app.routes.anomalies_api import bp as anomalies_bp
 
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(user_bp, url_prefix="/users")
-    app.register_blueprint(employee_bp)
-    app.register_blueprint(area_bp)
-    app.register_blueprint(camera_bp)
-    app.register_blueprint(attendance_bp)
-    app.register_blueprint(report_bp)
-    app.register_blueprint(notification_bp)
-    app.register_blueprint(admin_bp)
+    #app.register_blueprint(auth_bp)
+    #app.register_blueprint(user_bp, url_prefix="/users")
+    #app.register_blueprint(employee_bp)
+    #app.register_blueprint(area_bp)
+    #app.register_blueprint(camera_bp)
+    #app.register_blueprint(attendance_bp)
+    #app.register_blueprint(report_bp)
+    #app.register_blueprint(notification_bp)
+    #app.register_blueprint(admin_bp)
     app.register_blueprint(application_bp)
     app.register_blueprint(anomalies_bp)
 
