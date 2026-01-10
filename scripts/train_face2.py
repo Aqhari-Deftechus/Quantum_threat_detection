@@ -1,3 +1,5 @@
+# train_face2.py
+
 import os
 import cv2
 import numpy as np
@@ -6,6 +8,12 @@ from keras_facenet import FaceNet
 import mediapipe as mp
 import datetime
 from pathlib import Path
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+
+from mediapipe.tasks.python.core import base_options
+
+
 
 # --- Paths relative to repo root ---
 BASE_DIR = Path(__file__).resolve().parent      # scripts/
@@ -19,7 +27,21 @@ TIMESTAMP_FILE = BASE_DIR / "pkltimestamp"
 os.makedirs(BASE_DIR, exist_ok=True)
 
 # Face detection helper (MediaPipe)
-mp_face_detection = mp.solutions.face_detection
+#mp_face_detection = mp.solutions.face_detection
+
+# -------- MediaPipe Tasks FaceLandmarker (TRAINING) --------
+face_landmarker_options = vision.FaceLandmarkerOptions(
+    base_options=base_options.BaseOptions(
+        model_asset_path=str(ROOT_DIR / "model" / "face_landmarker.task")
+  
+    ),
+    running_mode=vision.RunningMode.IMAGE,
+    num_faces=1
+)
+
+face_landmarker = vision.FaceLandmarker.create_from_options(face_landmarker_options)
+
+
 
 def scale_box(box, scale_factor=1.2):
     x, y, w, h = box
@@ -29,29 +51,46 @@ def scale_box(box, scale_factor=1.2):
     return max(0, x), max(0, y), w, h
 
 
-def detect_faces_mediapipe(image, face_detection):
-    """Detect and crop faces using MediaPipe.
-    Returns list of (face_crop, (x,y,w,h)) as before.
+def detect_faces_facelandmarker(image):
     """
-    results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    Detect faces using MediaPipe FaceLandmarker.
+    Returns list of (face_crop, (x,y,w,h)) — SAME FORMAT as before.
+    """
+    h_img, w_img, _ = image.shape
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB,
+                        data=cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+
+    result = face_landmarker.detect(mp_image)
     faces = []
-    if results.detections:
-        h_img, w_img, _ = image.shape
-        for detection in results.detections:
-            bboxC = detection.location_data.relative_bounding_box
-            x, y, w, h = int(bboxC.xmin * w_img), int(bboxC.ymin * h_img), int(bboxC.width * w_img), int(bboxC.height * h_img)
-            x, y, w, h = scale_box((x, y, w, h))
-            # Make sure box is within image
-            x2 = max(0, min(x + w, w_img))
-            y2 = max(0, min(y + h, h_img))
-            x = max(0, x); y = max(0, y)
-            if y2 <= y or x2 <= x:
-                continue
-            face = image[y:y2, x:x2]
-            if face.size == 0:
-                continue
-            faces.append((face, (x, y, x2 - x, y2 - y)))
+
+    if not result.face_landmarks:
+        return faces
+
+    for landmarks in result.face_landmarks:
+        xs = [lm.x for lm in landmarks]
+        ys = [lm.y for lm in landmarks]
+
+        x1 = int(min(xs) * w_img)
+        y1 = int(min(ys) * h_img)
+        x2 = int(max(xs) * w_img)
+        y2 = int(max(ys) * h_img)
+
+        # safety clamp
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w_img, x2), min(h_img, y2)
+
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        face_crop = image[y1:y2, x1:x2]
+        if face_crop.size == 0:
+            continue
+        faces.append((face_crop, (x1, y1, x2 - x1, y2 - y1)))
+
     return faces
+
+
+
 
 # Preprocessing for FaceNet
 INPUT_SIZE = (160, 160)
@@ -119,73 +158,72 @@ def extract_embeddings(faces):
 
 # Training function
 def train_model():
-    """Scan data directory, extract embeddings, and pickle them.
-    Improved:
-      - filters low-quality face crops
-      - stores per-person embeddings and centroid (mean) vector (both L2-normalized)
-    """
     embeddings_dict = {}
-    with mp_face_detection.FaceDetection(min_detection_confidence=0.5) as face_detection:
-        persons = [p for p in os.listdir(DATA_DIR) if (DATA_DIR / p).is_dir()]
-        print(f"[train] Found {len(persons)} person folders in {DATA_DIR}")
-        for person in persons:
-            person_path = DATA_DIR / person
-            person_embeddings = []
-            image_files = [f for f in os.listdir(person_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-            if not image_files:
-                print(f"[train] no image files for {person}, skipping")
+
+    persons = [p for p in os.listdir(DATA_DIR) if (DATA_DIR / p).is_dir()]
+    print(f"[train] Found {len(persons)} person folders in {DATA_DIR}")
+
+    for person in persons:
+        person_path = DATA_DIR / person
+        person_embeddings = []
+
+        image_files = [f for f in os.listdir(person_path)
+                       if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+
+        if not image_files:
+            print(f"[train] no image files for {person}, skipping")
+            continue
+
+        for img_name in image_files:
+            img_path = person_path / img_name
+            image = cv2.imread(str(img_path))
+
+            if image is None:
+                print(f"[train] failed to read {img_path}, skipping")
                 continue
-            for img_name in image_files:
-                img_path = person_path / img_name
-                image = cv2.imread(str(img_path))
-                if image is None:
-                    print(f"[train] failed to read {img_path}, skipping")
-                    continue
-                faces = detect_faces_mediapipe(image, face_detection)
-                if not faces:
-                    continue
-                good_faces = []
-                for (face_crop, bbox) in faces:
-                    if face_quality_ok(face_crop):
-                        good_faces.append((face_crop, bbox))
-                if not good_faces:
-                    continue
-                try:
-                    embs = extract_embeddings(good_faces)
-                    if embs.shape[0] > 0:
-                        for e in embs:
-                            person_embeddings.append(e)
-                except Exception as e:
-                    print(f"[train] embedding extraction error for {img_path}: {e}")
-                    continue
-            if person_embeddings:
-                arr = np.vstack(person_embeddings).astype(np.float32)
-                arr = np.array([l2_normalize(e) for e in arr], dtype=np.float32)
-                centroid = np.mean(arr, axis=0)
-                centroid = l2_normalize(centroid)
-                embeddings_dict[person] = {
-                    "embeddings": arr,
-                    "centroid": centroid
-                }
-                print(f"[train] processed {person}: {arr.shape[0]} embeddings, centroid computed")
-            else:
-                print(f"[train] no valid embeddings for {person}, skipping")
 
-    # Save to disk (pickle)
-    try:
-        with open(OUTPUT_FILE, "wb") as f:
-            pickle.dump(embeddings_dict, f)
-        print(f"[train] Saved embeddings for {len(embeddings_dict)} identities to {OUTPUT_FILE}")
-    except Exception as e:
-        print(f"[train] Failed to save embeddings to {OUTPUT_FILE}: {e}")
+            faces = detect_faces_facelandmarker(image)
+            if not faces:
+                continue
 
-    # Update timestamp flag for monitoring
-    try:
-        with open(TIMESTAMP_FILE, "w") as flag:
-            flag.write(str(datetime.datetime.now().timestamp()))
-        print(f"[train] Updated timestamp file {TIMESTAMP_FILE}")
-    except Exception as e:
-        print(f"[train] Failed to update timestamp file: {e}")
+            good_faces = []
+            for face_crop, bbox in faces:
+                if face_quality_ok(face_crop):
+                    good_faces.append((face_crop, bbox))
+
+            if not good_faces:
+                continue
+
+            try:
+                embs = extract_embeddings(good_faces)
+                for e in embs:
+                    person_embeddings.append(e)
+            except Exception as e:
+                print(f"[train] embedding error for {img_path}: {e}")
+
+        if person_embeddings:
+            arr = np.vstack(person_embeddings).astype(np.float32)
+            arr = np.array([l2_normalize(e) for e in arr], dtype=np.float32)
+            centroid = l2_normalize(np.mean(arr, axis=0))
+
+            embeddings_dict[person] = {
+                "embeddings": arr,
+                "centroid": centroid
+            }
+
+            print(f"[train] processed {person}: {arr.shape[0]} embeddings")
+        else:
+            print(f"[train] no valid embeddings for {person}, skipping")
+
+    # Save pickle
+    with open(OUTPUT_FILE, "wb") as f:
+        pickle.dump(embeddings_dict, f)
+
+    with open(TIMESTAMP_FILE, "w") as flag:
+        flag.write(str(datetime.datetime.now().timestamp()))
+
+    print("[train] Training complete")
+
 
 # Entry point for training
 if __name__ == "__main__":

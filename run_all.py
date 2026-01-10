@@ -1,3 +1,5 @@
+#run_all.py
+
 import subprocess
 import sys
 import time
@@ -7,8 +9,8 @@ import socket
 
 
 
-BASE_DIR = r"C:\Users\dusai\Desktop\Quantum_Threat_Detection"
-VENV_PYTHON = r"C:\Users\dusai\myenv\Scripts\python.exe"
+BASE_DIR = r'C:\Users\dus_m\OneDrive\Desktop\Quantum_threat_detection'
+VENV_PYTHON = r"C:\Users\dus_m\myenv\Scripts\python.exe"
 REDIS_EXE = r"C:\Program Files\Redis\redis-server.exe"
 
 def start_process(cmd, cwd=None):

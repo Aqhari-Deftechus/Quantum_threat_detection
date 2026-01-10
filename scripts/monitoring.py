@@ -1,4 +1,4 @@
-# monitoring.py
+# scripts/monitoring.py
 import cv2
 import numpy as np
 import pickle
@@ -23,15 +23,24 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.core import base_options
+
 from ultralytics import YOLO
 from keras_facenet import FaceNet
 from deep_sort_realtime.deepsort_tracker import DeepSort
 import mysql.connector
 
-def init_face_model():
-    import mediapipe as mp
-    #return mp.solutions.face_mesh
-    return mp.tasks.face_mesh
+
+#def init_face_model():
+#    import mediapipe as mp
+#    #return mp.solutions.face_mesh
+#    return mp.tasks.face_mesh
+options = vision.FaceLandmarkerOptions(
+    base_options=base_options.BaseOptions(
+        model_asset_path=r"C:\Users\dus_m\OneDrive\Desktop\Quantum_threat_detection\model\face_landmarker.task"
+    ),
+    running_mode=vision.RunningMode.IMAGE,
+    num_faces=1
+)
 
 
 # ----------------- Patch: Force torchvision.ops.nms to run on CPU (keeps compatibility) -----------------
@@ -70,14 +79,14 @@ UNAUTHORIZED_COOLDOWN_SECONDS = 10 # per camera
 DB_CONFIG = {
     "host": "localhost",   # IMPORTANT: avoid localhost socket issues
     "user": "admin123",
-    "password": "Degftech@012026",
+    "password": "Deftech@012026",
     "database": "RestrictedAreaDB",
     #"port": 3306
 }
 
 
 # Directory to save anomaly clips & JSON (user-specified)
-ANOMALY_BASE_DIR = Path(r"C:\Users\dusai\Desktop\Quantum_Threat_Detection\Anomalies_video")
+ANOMALY_BASE_DIR = Path(r"C:\Users\dus_m\OneDrive\Desktop\Quantum_threat_detection\Anomalies_video")
 
 
 
@@ -124,12 +133,7 @@ except Exception:
     logging.warning(f"Could not create anomaly base dir: {ANOMALY_BASE_DIR}")
 
 
-options = vision.FaceLandmarkerOptions(
-    base_options=base_options.BaseOptions(
-        model_asset_path=r"C:\Users\dusai\Desktop\Quantum_Threat_Detection\model\face_landmarker.task"
-    ),
-    running_mode=vision.RunningMode.IMAGE,
-    num_faces=1)
+
 
 # ----------------- Helper -----------------
 def normalize_source(source):
@@ -725,7 +729,18 @@ class Camera:
                 self.track_info[tid] = entry
                 self.last_identity[tid] = entry.copy()
                 try:
-                    ev = {'name': name, 'auth': auth, 'similarity': sim, 'timestamp': tstamp}
+                    #ev = {'name': name, 'auth': auth, 'similarity': sim, 'timestamp': tstamp}
+                    ev = {
+                        "name": name,
+                        "auth": auth,
+                        "similarity": sim,
+                        "timestamp": tstamp,
+
+                        "bbox": [l, t, w, h],
+                        "frame_width": frame_w,
+                        "frame_height": frame_h,
+                        "track_id": tid
+                    }
                     latest_faces[self.camera_id] = ev
                     try:
                         on_face_recognized(self.camera_id, ev)
@@ -740,6 +755,33 @@ class Camera:
                     continue
                 tid = tr.track_id
                 l, t, w, h = map(int, tr.to_ltwh())
+
+                frame_h, frame_w = processed.shape[:2]
+
+                info = self.track_info.get(tid)
+                if info:
+                    ev = {
+                        "name": info["name"],
+                        "auth": info["auth"],
+                        "similarity": round(info["similarity"], 3),
+                        "timestamp": time.time(),
+                        "bbox": [l, t, w, h],
+                        "frame_width": frame_w,
+                        "frame_height": frame_h,
+                        "track_id": tid
+                    }
+
+                    latest_faces[self.camera_id] = ev
+    
+
+                bbox_payload = {
+                    "bbox": [l, t, w, h],
+                    "frame_width": frame_w,
+                    "frame_height": frame_h,
+                    "track_id": tid
+
+                }
+
                 roi = processed[t:t+h, l:l+w]
                 if isinstance(roi, np.ndarray) and roi.size == 0:
                     continue
@@ -754,13 +796,39 @@ class Camera:
                         try:
                             rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
                             #lm_res = self.mp_face_mesh.process(rgb)
-                            lm_res = self.mp_face_mesh.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
+                            #lm_res = self.mp_face_mesh.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
 
-                            if not lm_res.multi_face_landmarks:
+                            #if not lm_res.multi_face_landmarks:
+                            #    continue
+                            #pts = lm_res.multi_face_landmarks[0].landmark
+                            #left = (int(pts[33].x * w), int(pts[33].y * h))
+                            #right = (int(pts[263].x * w), int(pts[263].y * h))
+
+                            mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                            lm_res = self.mp_face_mesh.detect(mp_img)
+
+                            if not lm_res.face_landmarks:
                                 continue
-                            pts = lm_res.multi_face_landmarks[0].landmark
-                            left = (int(pts[33].x * w), int(pts[33].y * h))
-                            right = (int(pts[263].x * w), int(pts[263].y * h))
+
+                            pts = lm_res.face_landmarks[0]
+
+                            # Safer eye landmarks (Tasks spec)
+
+                            LEFT_EYE  = 33
+                            RIGHT_EYE = 263
+
+                            left = (int(pts[LEFT_EYE].x * w), int(pts[LEFT_EYE].y * h))
+
+                            right = (int(pts[RIGHT_EYE].x * w), int(pts[RIGHT_EYE].y * h))
+
+                            # Guard against bad geometry
+
+                            if abs(left[0] - right[0]) < 5:
+                                continue
+
+
+
+                        
                             aligned = align_face(roi, [left, right])
                             try:
                                 self.recognition_queue.put((tid, aligned), timeout=0.1)
@@ -887,12 +955,22 @@ class Camera:
                         pre_frames = list(buf) if buf and len(buf) > 0 else [processed.copy()]
 
                         #pre_frames = list(frame_buffers.get(self.camera_id, []))
+
+                        relevant_tids = set()
+                        for obj in anomalies_in_frame:
+                            if 'track_id' in obj:
+                                relevant_tids.add(obj['track_id'])
+
+                        
                         
                         summary = {
                             "detected_objects": anomalies_in_frame,
                             "count": len(anomalies_in_frame),
                             "pre_seconds": PRE_EVENT_SECONDS,
-                            "post_seconds": POST_EVENT_SECONDS
+                            "post_seconds": POST_EVENT_SECONDS,
+                            "involved_identities": [
+                                {"track_id": tid, "name": self.track_info[tid]['name'], "auth": self.track_info[tid]['auth']}
+                                for tid in relevant_tids]
                         }
                         
                         # Define a small wrapper to wait for POST-frames WITHOUT blocking this loop
