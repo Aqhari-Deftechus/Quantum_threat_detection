@@ -1,0 +1,23 @@
+{
+  "camera_id": "1",
+  "timestamp": "2026-01-11T11:06:47.290953",
+  "anomaly": {
+    "detected_objects": [
+      {
+        "label": "Vape-Detected",
+        "conf": 0.8261324167251587,
+        "xyxy": [
+          700,
+          534,
+          806,
+          703
+        ]
+      }
+    ],
+    "count": 1,
+    "pre_seconds": 3,
+    "post_seconds": 3,
+    "involved_identities": []
+  },
+  "video_path": "C:\\Users\\dus_m\\OneDrive\\Desktop\\Quantum_threat_detection\\Anomalies_video\\2026-01-11\\1_20260111_110646_dc69d7.mp4"
+}
