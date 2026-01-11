@@ -1,18 +1,21 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-
-export const DEFAULT_ANOMALIES_ENDPOINT = `${API_BASE_URL}/api/anomalies`;
+import axiosClient from "../api/axiosClient";
+import { fetchCameraAnomalies, listCameras } from "./monitoringApi";
 
 export const resolveAssetUrl = (url) => {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+  const baseUrl = axiosClient.defaults.baseURL?.replace(/\/$/, "") || "";
+  return `${baseUrl}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
-export const normalizeAnomaly = (item) => ({
-  id: item.incident_id ?? item.anomaly_id ?? item.id ?? `${item.timestamp}`,
+export const normalizeAnomaly = (item, cameraIdFallback) => ({
+  id:
+    item.incident_id ??
+    item.anomaly_id ??
+    item.id ??
+    `${item.timestamp}-${cameraIdFallback || "unknown"}`,
   timestamp: item.timestamp ?? item.date ?? "",
-  camera_id: item.camera_id ?? item.camera ?? "Unknown",
+  camera_id: item.camera_id ?? item.camera ?? cameraIdFallback ?? "Unknown",
   category: item.category ?? item.type ?? "Uncategorized",
   confidence: Number(item.confidence ?? item.similarity ?? 0),
   thumbnail_url: item.thumbnail_url ?? item.image_url ?? "",
@@ -20,10 +23,15 @@ export const normalizeAnomaly = (item) => ({
 });
 
 export async function fetchAnomalies() {
-  const response = await fetch(DEFAULT_ANOMALIES_ENDPOINT);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch anomalies: ${response.status}`);
-  }
-  const data = await response.json();
-  return Array.isArray(data) ? data.map(normalizeAnomaly) : [];
+  const cameras = await listCameras();
+  if (!cameras.length) return [];
+
+  const results = await Promise.all(
+    cameras.map(async (cameraId) => {
+      const data = await fetchCameraAnomalies(cameraId);
+      return data.map((item) => normalizeAnomaly(item, cameraId));
+    })
+  );
+
+  return results.flat();
 }
