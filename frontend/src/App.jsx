@@ -1,21 +1,23 @@
-// src/App.jsx
+import { useMemo, useState } from "react";
+import AppShell from "./components/layout/AppShell";
+import Analysis from "./pages/Analysis";
+import Anomalies from "./pages/Anomalies";
+import LiveDetection from "./pages/LiveDetection";
 
-import { useState } from "react";
-import AppTable from "./AppTable";
-import LiveDetection from "./LiveDetection"; // your new live detection component
+const PAGE_COMPONENTS = {
+  live: LiveDetection,
+  analysis: Analysis,
+  anomalies: Anomalies,
+};
 
 function App() {
-  const [page, setPage] = useState(1); // 1 = live, 2 = table
+  const [page, setPage] = useState("live");
+  const PageComponent = useMemo(() => PAGE_COMPONENTS[page], [page]);
 
   return (
-    <div>
-      <nav style={{ marginBottom: "20px" }}>
-        <button onClick={() => setPage(1)}>Live Detection</button>
-        <button onClick={() => setPage(2)}>Anomalies Table</button>
-      </nav>
-
-      {page === 1 ? <LiveDetection /> : <AppTable />}
-    </div>
+    <AppShell activePage={page} onNavigate={setPage}>
+      <PageComponent />
+    </AppShell>
   );
 }
 
