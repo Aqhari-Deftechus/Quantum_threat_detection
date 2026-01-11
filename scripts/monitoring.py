@@ -736,10 +736,7 @@ class Camera:
                         "similarity": sim,
                         "timestamp": tstamp,
 
-                        "bbox": [l, t, w, h],
-                        "frame_width": frame_w,
-                        "frame_height": frame_h,
-                        "track_id": tid
+                        
                     }
                     latest_faces[self.camera_id] = ev
                     try:
