@@ -87,7 +87,7 @@ def add_camera():
     camera_id = data.get("camera_id")
     source = data.get("source")
 
-    if not camera_id or not source:
+    if not camera_id or source is None:
         return jsonify({"error": "camera_id and source are required"}), 400
 
     monitoring.add_camera(camera_id, source)
@@ -174,7 +174,7 @@ def test_camera_connection():
     data = request.json or {}
     source = data.get("source")
 
-    if not source:
+    if source is None:
         return jsonify({"error": "source required"}), 400
 
     cap = cv2.VideoCapture(source)

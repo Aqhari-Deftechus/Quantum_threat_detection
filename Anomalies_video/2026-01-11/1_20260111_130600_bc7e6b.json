@@ -1,0 +1,23 @@
+{
+  "camera_id": "1",
+  "timestamp": "2026-01-11T13:06:00.781685",
+  "anomaly": {
+    "detected_objects": [
+      {
+        "label": "Phone-Detected",
+        "conf": 0.765792965888977,
+        "xyxy": [
+          1041,
+          344,
+          1161,
+          559
+        ]
+      }
+    ],
+    "count": 1,
+    "pre_seconds": 3,
+    "post_seconds": 3,
+    "involved_identities": []
+  },
+  "video_path": "C:\\Users\\dus_m\\OneDrive\\Desktop\\Quantum_threat_detection\\Anomalies_video\\2026-01-11\\1_20260111_130600_bc7e6b.mp4"
+}
