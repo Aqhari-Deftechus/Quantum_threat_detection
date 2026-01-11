@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addCamera,
   buildStreamUrl,
   checkHealth,
   deleteCamera,
+  fetchCameraAnomalies,
   fetchCameraFaces,
   listCameras,
   startCamera,
@@ -27,6 +28,14 @@ const defaultCameraForm = {
   source: "",
 };
 
+const parseSource = (value) => {
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+  return trimmed;
+};
+
 function LiveDetection() {
   const [health, setHealth] = useState({ status: "unknown" });
   const [cameras, setCameras] = useState([]);
@@ -35,8 +44,11 @@ function LiveDetection() {
   const [connectionStatus, setConnectionStatus] = useState("Idle");
   const [streamStatus, setStreamStatus] = useState("Connecting");
   const [latestFace, setLatestFace] = useState(null);
+  const [latestAnomalies, setLatestAnomalies] = useState([]);
   const [events, setEvents] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const streamImgRef = useRef(null);
+  const overlayRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -69,9 +81,14 @@ function LiveDetection() {
     let mounted = true;
     const refresh = async () => {
       try {
-        const face = await fetchCameraFaces(activeCamera);
+        const [face, anomalies] = await Promise.all([
+          fetchCameraFaces(activeCamera),
+          fetchCameraAnomalies(activeCamera),
+        ]);
+
         if (mounted) {
           setLatestFace(face);
+          setLatestAnomalies(anomalies);
           setLastUpdated(new Date());
         }
       } catch (error) {
@@ -106,9 +123,14 @@ function LiveDetection() {
 
     try {
       setConnectionStatus("Testing...");
-      await testCameraConnection(cameraForm.source);
+      const parsedSource = parseSource(cameraForm.source);
+      await testCameraConnection(parsedSource);
       setConnectionStatus("Connected");
-      await addCamera(cameraForm);
+      await addCamera({
+        camera_id: cameraForm.camera_id,
+        source: parsedSource,
+      });
+
       await startCamera(cameraForm.camera_id);
       const updated = await listCameras();
       setCameras(updated);
@@ -139,6 +161,45 @@ function LiveDetection() {
 
   const activeEvents = events.filter((event) => event.camera_id === activeCamera);
 
+  useEffect(() => {
+    const canvas = overlayRef.current;
+    const image = streamImgRef.current;
+    if (!canvas || !image) return;
+
+    const width = image.clientWidth;
+    const height = image.clientHeight;
+    if (!width || !height) return;
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, width, height);
+    activeEvents.forEach((event) => {
+      if (!event.bbox || !event.frame_width || !event.frame_height) return;
+      const [x, y, w, h] = event.bbox;
+      const scaleX = width / event.frame_width;
+      const scaleY = height / event.frame_height;
+      const left = x * scaleX;
+      const top = y * scaleY;
+      const boxW = w * scaleX;
+      const boxH = h * scaleY;
+      const color = event.auth ? "#00e676" : "#ffb300";
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(left, top, boxW, boxH);
+
+      const label = `${event.name || "Unknown"} (${Math.round(
+        event.similarity || 0
+      )}%)`;
+      ctx.fillStyle = color;
+      ctx.font = "14px Inter, sans-serif";
+      ctx.fillText(label, left, Math.max(top - 8, 16));
+    });
+  }, [activeEvents, streamStatus, streamUrl]);
+
   return (
     <section className="page">
       <div className="page-header">
@@ -159,12 +220,16 @@ function LiveDetection() {
           </div>
           <div className="stream-frame">
             {streamUrl ? (
-              <img
-                src={streamUrl}
-                alt="Live detection stream"
-                onLoad={() => setStreamStatus("Live")}
-                onError={() => setStreamStatus("Offline")}
-              />
+              <div className="stream-layer">
+                <img
+                  ref={streamImgRef}
+                  src={streamUrl}
+                  alt="Live detection stream"
+                  onLoad={() => setStreamStatus("Live")}
+                  onError={() => setStreamStatus("Offline")}
+                />
+                <canvas ref={overlayRef} className="stream-canvas" />
+              </div>
             ) : (
               <p className="muted">Select a camera to start streaming.</p>
             )}
@@ -276,11 +341,11 @@ function LiveDetection() {
                 <p className="value">{latestFace?.name || "—"}</p>
               </div>
               <div>
-                <p className="label">Similarity</p>
+                <p className="label">Anomalies</p>
                 <p className="value">
-                  {latestFace?.similarity
-                    ? `${latestFace.similarity}%`
-                    : "—"}
+                  {latestAnomalies.length
+                    ? `${latestAnomalies.length} detected`
+                    : "None"}
                 </p>
               </div>
               <div>
