@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchAnomalies } from "../services/anomaliesApi";
-
-const STREAM_URL =
-  import.meta.env.VITE_MJPEG_STREAM_URL || "http://localhost:8000/stream";
+import {
+  addCamera,
+  buildStreamUrl,
+  checkHealth,
+  deleteCamera,
+  fetchCameraFaces,
+  listCameras,
+  startCamera,
+  stopCamera,
+  subscribeToEvents,
+  testCameraConnection,
+} from "../services/monitoringApi";
 
 const formatTimestamp = (value) => {
   if (!value) return "No updates yet";
@@ -14,38 +22,122 @@ const formatTimestamp = (value) => {
   }).format(date);
 };
 
+const defaultCameraForm = {
+  camera_id: "",
+  source: "",
+};
+
 function LiveDetection() {
-  const [anomalies, setAnomalies] = useState([]);
-  const [lastUpdated, setLastUpdated] = useState(null);
+  const [health, setHealth] = useState({ status: "unknown" });
+  const [cameras, setCameras] = useState([]);
+  const [activeCamera, setActiveCamera] = useState("");
+  const [cameraForm, setCameraForm] = useState(defaultCameraForm);
+  const [connectionStatus, setConnectionStatus] = useState("Idle");
   const [streamStatus, setStreamStatus] = useState("Connecting");
+  const [latestFace, setLatestFace] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
     const load = async () => {
       try {
-        const data = await fetchAnomalies();
-        if (!isMounted) return;
-        setAnomalies(data);
-        setLastUpdated(new Date());
+        const [healthData, cameraList] = await Promise.all([
+          checkHealth(),
+          listCameras(),
+        ]);
+        if (!mounted) return;
+        setHealth(healthData);
+        setCameras(cameraList);
+        if (!activeCamera && cameraList.length) {
+          setActiveCamera(cameraList[0]);
+        }
       } catch (error) {
         console.error(error);
       }
     };
 
     load();
-    const interval = setInterval(load, 5000);
     return () => {
-      isMounted = false;
+      mounted = false;
+    };
+  }, [activeCamera]);
+
+  useEffect(() => {
+    if (!activeCamera) return undefined;
+    let mounted = true;
+    const refresh = async () => {
+      try {
+        const face = await fetchCameraFaces(activeCamera);
+        if (mounted) {
+          setLatestFace(face);
+          setLastUpdated(new Date());
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    refresh();
+    const interval = setInterval(refresh, 3000);
+    return () => {
+      mounted = false;
       clearInterval(interval);
+    };
+  }, [activeCamera]);
+
+  useEffect(() => {
+    const eventSource = subscribeToEvents((payload) => {
+      setEvents((prev) => [payload, ...prev].slice(0, 20));
+    });
+    return () => {
+      eventSource.close();
     };
   }, []);
 
-  const feedItems = useMemo(() => {
-    return [...anomalies]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, 10);
-  }, [anomalies]);
+  const streamUrl = useMemo(
+    () => buildStreamUrl(activeCamera, 6),
+    [activeCamera]
+  );
+
+  const handleAddCamera = async (event) => {
+    event.preventDefault();
+    if (!cameraForm.camera_id || !cameraForm.source) return;
+
+    try {
+      setConnectionStatus("Testing...");
+      await testCameraConnection(cameraForm.source);
+      setConnectionStatus("Connected");
+      await addCamera(cameraForm);
+      await startCamera(cameraForm.camera_id);
+      const updated = await listCameras();
+      setCameras(updated);
+      setActiveCamera(cameraForm.camera_id);
+      setCameraForm(defaultCameraForm);
+    } catch (error) {
+      console.error(error);
+      setConnectionStatus("Failed");
+    }
+  };
+
+  const handleStart = async (cameraId) => {
+    await startCamera(cameraId);
+  };
+
+  const handleStop = async (cameraId) => {
+    await stopCamera(cameraId);
+  };
+
+  const handleDelete = async (cameraId) => {
+    await deleteCamera(cameraId);
+    const updated = await listCameras();
+    setCameras(updated);
+    if (cameraId === activeCamera) {
+      setActiveCamera(updated[0] || "");
+    }
+  };
+
+  const activeEvents = events.filter((event) => event.camera_id === activeCamera);
 
   return (
     <section className="page">
@@ -54,7 +146,9 @@ function LiveDetection() {
           <h1>Live Detection</h1>
           <p>Live annotated stream with real-time detection updates.</p>
         </div>
-        <span className="status-pill">Live</span>
+        <span className="status-pill">
+          API: {health.status === "ok" ? "Online" : "Offline"}
+        </span>
       </div>
 
       <div className="grid-two">
@@ -64,33 +158,130 @@ function LiveDetection() {
             <span className="badge">{streamStatus}</span>
           </div>
           <div className="stream-frame">
-            {STREAM_URL ? (
+            {streamUrl ? (
               <img
-                src={STREAM_URL}
+                src={streamUrl}
                 alt="Live detection stream"
                 onLoad={() => setStreamStatus("Live")}
                 onError={() => setStreamStatus("Offline")}
               />
             ) : (
-              <p className="muted">Configure the MJPEG stream URL.</p>
+              <p className="muted">Select a camera to start streaming.</p>
             )}
           </div>
-          <p className="muted">Stream endpoint: {STREAM_URL}</p>
+          <p className="muted">Stream endpoint: {streamUrl || "—"}</p>
         </div>
 
         <div className="stack">
           <div className="card">
             <div className="card-header">
-              <h2>System Status</h2>
+              <h2>Camera Control</h2>
+              <span className="badge accent">{connectionStatus}</span>
+            </div>
+            <form className="form-grid" onSubmit={handleAddCamera}>
+              <label className="field">
+                <span>Camera ID</span>
+                <input
+                  value={cameraForm.camera_id}
+                  onChange={(event) =>
+                    setCameraForm((prev) => ({
+                      ...prev,
+                      camera_id: event.target.value,
+                    }))
+                  }
+                  placeholder="cam-01"
+                />
+              </label>
+              <label className="field">
+                <span>Source (Webcam index or RTSP URL)</span>
+                <input
+                  value={cameraForm.source}
+                  onChange={(event) =>
+                    setCameraForm((prev) => ({
+                      ...prev,
+                      source: event.target.value,
+                    }))
+                  }
+                  placeholder="0 or rtsp://user:pass@ip/stream"
+                />
+              </label>
+              <div className="form-actions">
+                <button type="submit" className="primary-button">
+                  Test + Add Camera
+                </button>
+                <p className="muted">
+                  Use <strong>0</strong> for local webcam in the backend host.
+                </p>
+              </div>
+            </form>
+
+            <div className="camera-list">
+              {cameras.length === 0 ? (
+                <p className="muted">No cameras configured.</p>
+              ) : (
+                cameras.map((cameraId) => (
+                  <div
+                    key={cameraId}
+                    className={`camera-item ${
+                      activeCamera === cameraId ? "active" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => setActiveCamera(cameraId)}
+                    >
+                      {cameraId}
+                    </button>
+                    <div className="camera-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => handleStart(cameraId)}
+                      >
+                        Start
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => handleStop(cameraId)}
+                      >
+                        Stop
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() => handleDelete(cameraId)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <h2>Latest Recognition</h2>
             </div>
             <div className="status-list">
               <div>
-                <p className="label">Stream status</p>
-                <p className="value">{streamStatus}</p>
+                <p className="label">Camera</p>
+                <p className="value">{activeCamera || "None"}</p>
               </div>
               <div>
-                <p className="label">Total anomalies detected</p>
-                <p className="value">{anomalies.length}</p>
+                <p className="label">Identity</p>
+                <p className="value">{latestFace?.name || "—"}</p>
+              </div>
+              <div>
+                <p className="label">Similarity</p>
+                <p className="value">
+                  {latestFace?.similarity
+                    ? `${latestFace.similarity}%`
+                    : "—"}
+                </p>
               </div>
               <div>
                 <p className="label">Last updated</p>
@@ -102,23 +293,25 @@ function LiveDetection() {
           <div className="card">
             <div className="card-header">
               <h2>Detection Feed</h2>
-              <span className="badge accent">Live</span>
+              <span className="badge accent">SSE Live</span>
             </div>
             <div className="feed">
-              {feedItems.length === 0 ? (
+              {activeEvents.length === 0 ? (
                 <p className="muted">Waiting for detections...</p>
               ) : (
-                feedItems.map((item) => (
-                  <div className="feed-item" key={item.id}>
+                activeEvents.map((item, index) => (
+                  <div className="feed-item" key={`${item.camera_id}-${index}`}>
                     <div>
-                      <p className="feed-title">{item.category}</p>
+                      <p className="feed-title">{item.name || "Unknown"}</p>
                       <p className="muted">
-                        {item.camera_id} •{" "}
-                        {formatTimestamp(item.timestamp)}
+                        {item.camera_id} • {formatTimestamp(item.timestamp)}
+                      </p>
+                      <p className="muted">
+                        BBox: {item.bbox ? item.bbox.join(", ") : "—"}
                       </p>
                     </div>
                     <span className="badge">
-                      {Math.round(item.confidence * 100)}%
+                      {Math.round(item.similarity || 0)}%
                     </span>
                   </div>
                 ))

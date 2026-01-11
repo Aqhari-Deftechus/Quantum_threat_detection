@@ -443,3 +443,68 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+.primary-button {
+  background: var(--brand-accent);
+  color: #0b0f14;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.camera-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.camera-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+}
+
+.camera-item.active {
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 1px rgba(63, 124, 255, 0.2);
+}
+
+.camera-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger-button {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
