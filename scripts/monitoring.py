@@ -680,10 +680,10 @@ class Camera:
             except Exception:
                 continue
 
-            try:
-                latest_frames[self.camera_id] = frame.copy()
-            except Exception:
-                latest_frames[self.camera_id] = None
+            #try:
+            #    latest_frames[self.camera_id] = frame.copy()
+            #except Exception:
+            #    latest_frames[self.camera_id] = None
 
             try:
                 processed, anomalies_in_frame = run_behavior(frame.copy())
@@ -873,6 +873,11 @@ class Camera:
                 overlay_text(processed, vcnt, ucnt, fps)
             except Exception:
                 pass
+
+            try:
+                latest_frames[self.camera_id] = processed.copy()
+            except Exception:
+                latest_frames[self.camera_id] = None
 
             # If anomalies detected by run_behavior (object_model inside boxes), save clip and dispatch event
 #            try:
